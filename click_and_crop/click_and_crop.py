@@ -70,7 +70,8 @@ if __name__ == '__main__':
 
     # counter for logging
     cycle = 0
-    # keep looping until the 'q' key is pressed
+
+	# keep looping until the 'q' key is pressed
     while True:
         if cycle > 50:
             print(cropping,selection_rectangle_endpoint)
@@ -91,7 +92,7 @@ if __name__ == '__main__':
             print('r pressed')
             image = clone.copy()
 
-        # check key
+        # if the key 'a' is pressed, print out current refPt
         if key == ord('a'):
             print('a pressed')
             print(refPt)
