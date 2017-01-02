@@ -6,32 +6,38 @@ import numpy as np
 
 # initialize global variables
 painting = False
-points = set()
-mode     = True
-mode_color = {
-    True:(0,255,0),
-    False:(0,0,255)
+points   = set()
+modes    = ['idle','label','erase']
+mode_idx = 0
+mode     = modes[mode_idx]
+labels   = [1,2,3,4]
+current_label = labels[label_idx]
+
+label_colors = {
+    1:(0,255,0),
+    2:(0,0,255),
+    3:(255,0,0),
+    4:(255,125,0)
 }
 
-# TODO Update to allow for labeling of more than 2 different groups
 # TODO Add color picker so label colors can be dynamic at run time
 # TODO Ensure label overwrites are handled
 # TODO Add erasure mode to 'undo' mislabeled areas
 
-
-def click_and_paint(event, x,y, flags, param):
+def onMouse(event, x,y, flags, param):
     """Callback function to handle mouse events"""
     global painting, points
+    print('mode: {} @ {},{}, labeled: {}'.format(mode,x,y,current_label))
     if event == cv2.EVENT_LBUTTONDOWN:
-        painting = True
-        points.add((x,y,mode))
-        cv2.circle(clone, (x,y), 2, mode_color[mode],-1)
+        if mode == 'label':
+            painting = True
+            points.add((x,y,current_label))
+            cv2.circle(clone, (x,y), 2, label_colors[current_label],-1)
 
     elif event == cv2.EVENT_MOUSEMOVE:
-        print('mode: {} @ {},{}'.format(mode,x,y))
         if painting == True:
-            points.add((x,y,mode))
-            cv2.circle(clone, (x,y), 2, mode_color[mode],-1)
+            points.add((x,y,current_label))
+            cv2.circle(clone, (x,y), 2, label_colors[current_label],-1)
 
     elif event == cv2.EVENT_LBUTTONUP:
         painting = False
@@ -57,9 +63,10 @@ def generate_stats():
     print(df.groupby(['label']).mean().ix[:,['r','g','b']])
 
 if __name__ == '__main__':
+    #global modes, modes_idx, labels, label_idx, current_label
     # construct argument parser and parse arguments
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-i","--image", required=True,
+    ap = argparse.ArgumentParser(description='Open and hand annotate an image')
+    ap.add_argument('-i',"--image", required=True,
                     help="Path to the image")
     args = vars(ap.parse_args())
 
@@ -67,10 +74,11 @@ if __name__ == '__main__':
     image = cv2.imread(args["image"])
     clone = image.copy()
     cv2.namedWindow("image")
-    cv2.setMouseCallback("image", click_and_paint)
+    cv2.setMouseCallback("image", onMouse)
 
     # counter for logging
     cycle = 0
+
     # keep looping until the 'q' key is pressed
     while True:
         cv2.imshow('image',clone)
@@ -88,7 +96,12 @@ if __name__ == '__main__':
             points = set()
 
         elif key == ord('m'):
-            mode = not mode
+            mode_idx += 1
+            mode = modes[mode_idx % len(modes)]
+
+        elif key in list(map(lambda s: ord(str(s)),labels)):
+            current_label = int(chr(key))
+            print('number {} selected'.format(int(chr(key))))
 
         elif key == ord('a'):
             print('length of points:\t{}'.format(len(points)))
