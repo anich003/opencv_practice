@@ -1,10 +1,18 @@
-# import necessary packages
+##############################################################################
+# TODO Implement bayesian esimate in new window based on labeled data
+# TODO Improve painting process so it doesn't skip on fast mouse
+# TODO Add ghost brush over/under mouse so user knows current size of brush
+# TODO Add color picker so label colors can be dynamic at run time
+##############################################################################
+
+# Import necessary packages
 import argparse
 import cv2
 import pandas as pd
 import numpy as np
-
-# initialize global variables
+##############################################################################
+# Initialize global variables
+##############################################################################
 painting = False
 points   = []
 modes    = ['idle','label','erase']
@@ -17,34 +25,43 @@ label_colors = {
     1:(0,255,0),
     2:(0,0,255),
     3:(255,0,0),
-    4:(255,125,0)
+    4:(255,125,125)
 }
 
 brush_sizes = [2,4,6,8,10]
-brush_idx   = 3
+brush_idx   = 2
+brush_size = brush_sizes[brush_idx]
 
-# TODO Add erasure mode to 'undo' mislabeled areas
-# TODO Add ability to change brush size
-# TODO Add color picker so label colors can be dynamic at run time
-# BUG Labeling with 4 adds label 3 sometimes
-# TODO improve painting process so it doesn't skip on fast mouse
-
+erase_color = (1,1,1)
+##############################################################################
+# Helper functions
+##############################################################################
 def onMouse(event, x,y, flags, param):
     """Callback function to handle mouse events"""
     global painting
     #print('mode: {} @ {},{}, labeled: {}'.format(mode,x,y,current_label))
+
     if event == cv2.EVENT_LBUTTONDOWN:
+        painting = True
         if mode == 'label':
-            painting = True
             cv2.circle(cpy, (x,y),
-                       brush_sizes[brush_idx],
+                       brush_size,
                        label_colors[current_label],-1)
+        elif mode == 'erase':
+            cv2.circle(cpy, (x,y),
+                       brush_size,
+                       erase_color,-1)
 
     elif event == cv2.EVENT_MOUSEMOVE:
         if painting == True:
-            cv2.circle(cpy, (x,y),
-                       brush_sizes[brush_idx],
-                       label_colors[current_label],-1)
+            if mode == 'label':
+                cv2.circle(cpy, (x,y),
+                           brush_size,
+                           label_colors[current_label],-1)
+            elif mode == 'erase':
+                cv2.circle(cpy, (x,y),
+                           brush_size,
+                           erase_color,-1)
 
     elif event == cv2.EVENT_LBUTTONUP:
         painting = False
@@ -70,9 +87,9 @@ def _generate_stats():
 
     # print out current statistics
     print(df.groupby(['label']).mean().ix[:,['r','g','b']])
+###############################################################################
 
 if __name__ == '__main__':
-    global points
 
     # construct argument parser and parse arguments
     ap = argparse.ArgumentParser(description='Open and hand annotate an image')
@@ -109,6 +126,7 @@ if __name__ == '__main__':
         elif key == ord('m'):
             mode_idx += 1
             mode = modes[mode_idx % len(modes)]
+            print('Current mode: {}'.format(mode))
 
         # check to see if a number was selected and if so, change
         # label number to corresponding number
@@ -116,8 +134,13 @@ if __name__ == '__main__':
             current_label = int(chr(key))
             print('number {} selected'.format(int(chr(key))))
 
-        elif key == ord('a'):
-            print('length of points:\t{}'.format(len(points)))
+        # check for '[' or ']' key press to increase or decrease brush size
+        elif key == ord('['):
+            brush_idx -= 1
+            brush_size = brush_sizes[brush_idx % len(brush_sizes)]
+        elif key == ord(']'):
+            brush_idx += 1
+            brush_size = brush_sizes[brush_idx % len(brush_sizes)]
 
         # Calculate statistics
         elif key == ord('c'):
@@ -135,10 +158,24 @@ if __name__ == '__main__':
 
             _generate_stats()
 
+        # general purpose status checking
+        elif key == ord('a'):
+            #print('length of points:\t{}'.format(len(points)))
+            #print(to_erase)
+            print('hello!')
+
         # if the 'q' key is pressed, quit program
         elif key == ord('q'):
             print('q pressed')
             _close()
             break
+
+        # Check to see if any pixels in cpy match erase color
+        # and if so revert that part of cpy back to img
+        to_erase = np.where(np.all(cpy==erase_color, axis=-1))
+        if to_erase:
+            xs = to_erase[0]
+            ys = to_erase[1]
+            cpy[xs,ys] = img[xs,ys]
 
         cycle += 1
