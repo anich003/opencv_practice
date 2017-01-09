@@ -10,6 +10,8 @@ import argparse
 import cv2
 import pandas as pd
 import numpy as np
+
+from skimage import io
 ##############################################################################
 # Initialize global variables
 ##############################################################################
@@ -99,7 +101,9 @@ if __name__ == '__main__':
 
     # load image, clone it, and setup mouse callback function
     img = cv2.imread(args["image"])
+    cv2.imwrite('../data/img.jpg', img)
     cpy = img.copy()
+
     cv2.namedWindow("image")
     cv2.setMouseCallback("image", onMouse)
 
@@ -169,6 +173,11 @@ if __name__ == '__main__':
             print('q pressed')
             _close()
             break
+
+        elif key == ord('s'):
+            #io.imsave('../data/cpy.jpg', cpy)
+            cv2.imwrite('../data/cpy.jpg', cpy)
+            print('cpy saved!')
 
         # Check to see if any pixels in cpy match erase color
         # and if so revert that part of cpy back to img
