@@ -1,4 +1,5 @@
 ##############################################################################
+# TODO Remove list of points and inplace add list of mu and cov for each label
 # TODO Implement bayesian esimate in new window based on labeled data
 # TODO Improve painting process so it doesn't skip on fast mouse
 # TODO Add ghost brush over/under mouse so user knows current size of brush
@@ -35,6 +36,12 @@ brush_idx   = 2
 brush_size = brush_sizes[brush_idx]
 
 erase_color = (1,1,1)
+
+# Statistics vars
+mus    = []
+covs   = []
+priors = []
+
 ##############################################################################
 # Helper functions
 ##############################################################################
@@ -73,7 +80,35 @@ def _close():
     """ close/destroy all windows """
     cv2.destroyAllWindows()
 
-def _generate_stats():
+def generate_mask(img,cpy):
+    """
+    Takes original and annotated image and returns mask,
+    where each color is a different label
+
+    Input:
+    img    -    original image
+    cpy    -    annotated image
+
+    Returns:
+    mask   -    Blacked out image, except for annotations
+    """
+
+    xs,ys = np.where(cpy!=img)[:-1]
+    mask  = np.zeros_like(cpy)
+    mask[xs,ys] = cpy[xs,ys]
+    return mask
+
+
+def generate_stats():
+    """
+    Given a mask and an original image, generate statistics for
+    each label
+
+    Input:
+
+    Output:
+
+    """
     print('generating statistics')
 
     # if recently 'reset' and points is currently empty, do nothing
@@ -125,6 +160,9 @@ if __name__ == '__main__':
             print('r pressed')
             cpy = img.copy()
             points = []
+            mus = []
+            covs = []
+            priors = []
 
         #    cycle through mouse modes: idle, label, erase
         elif key == ord('m'):
@@ -149,18 +187,31 @@ if __name__ == '__main__':
         # Calculate statistics
         elif key == ord('c'):
 
-            mask = np.where(cpy!=img,cpy,0)
-            tmp = []
+            #mask = np.where(cpy!=img,cpy,0)
+            mask = generate_mask(img,cpy)
+            #tmp = []
             for label,color in label_colors.items():
-                matches = np.where(np.all(mask==color, axis=-1))
-                xs = matches[0]
-                ys = matches[1]
-                tmp.append(list(zip(xs,ys,[label]*len(xs))))
-            points = []
-            for sublist in tmp:
-                points.extend(sublist)
+                xs,ys = np.where(np.all(mask==color, axis=-1))
+                #xs = matches[0]
+                #ys = matches[1]
+                #tmp.append(list(zip(xs,ys,[label]*len(xs))))
+                if (len(xs) > 0) and (len(ys) > 0):
+                    tmp = img[xs,ys]
 
-            _generate_stats()
+                    mus.append(tmp.mean(axis=0))
+                    covs.append(np.cov(tmp.T))
+                    priors.append(tmp.shape[0])
+            # points = []
+            # for sublist in tmp:
+            #     points.extend(sublist)
+
+            #generate_stats()
+
+            for mu in mus:
+                print(mu, end='\n')
+            print()
+            for cov in covs:
+                print(cov, end='\n')
 
         # general purpose status checking
         elif key == ord('a'):
