@@ -1,6 +1,5 @@
 ##############################################################################
-# TODO Remove list of points and inplace add list of mu and cov for each label
-# TODO Implement bayesian esimate in new window based on labeled data
+# TODO **Implement bayesian esimate in new window based on labeled data
 # TODO Improve painting process so it doesn't skip on fast mouse
 # TODO Add ghost brush over/under mouse so user knows current size of brush
 # TODO Add color picker so label colors can be dynamic at run time
@@ -48,7 +47,6 @@ priors = []
 def onMouse(event, x,y, flags, param):
     """Callback function to handle mouse events"""
     global painting
-    #print('mode: {} @ {},{}, labeled: {}'.format(mode,x,y,current_label))
 
     if event == cv2.EVENT_LBUTTONDOWN:
         painting = True
@@ -189,23 +187,16 @@ if __name__ == '__main__':
 
             #mask = np.where(cpy!=img,cpy,0)
             mask = generate_mask(img,cpy)
-            #tmp = []
+
             for label,color in label_colors.items():
                 xs,ys = np.where(np.all(mask==color, axis=-1))
-                #xs = matches[0]
-                #ys = matches[1]
-                #tmp.append(list(zip(xs,ys,[label]*len(xs))))
+
                 if (len(xs) > 0) and (len(ys) > 0):
                     tmp = img[xs,ys]
 
                     mus.append(tmp.mean(axis=0))
                     covs.append(np.cov(tmp.T))
                     priors.append(tmp.shape[0])
-            # points = []
-            # for sublist in tmp:
-            #     points.extend(sublist)
-
-            #generate_stats()
 
             for mu in mus:
                 print(mu, end='\n')
