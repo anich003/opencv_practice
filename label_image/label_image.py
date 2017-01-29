@@ -1,8 +1,11 @@
 ##############################################################################
+# DONE Downsample image to reasonable size
 # TODO **Implement bayesian esimate in new window based on labeled data
+# REACH
 # TODO Improve painting process so it doesn't skip on fast mouse
 # TODO Add ghost brush over/under mouse so user knows current size of brush
 # TODO Add color picker so label colors can be dynamic at run time
+# TODO Resizable windows
 ##############################################################################
 
 # Import necessary packages
@@ -11,12 +14,10 @@ import cv2
 import pandas as pd
 import numpy as np
 
-from skimage import io
 ##############################################################################
 # Initialize global variables
 ##############################################################################
 painting = False
-points   = []
 modes    = ['idle','label','erase']
 mode_idx = 0
 mode     = modes[mode_idx]
@@ -31,7 +32,7 @@ label_colors = {
 }
 
 brush_sizes = [2,4,6,8,10]
-brush_idx   = 2
+brush_idx   = 0
 brush_size = brush_sizes[brush_idx]
 
 erase_color = (1,1,1)
@@ -73,6 +74,13 @@ def onMouse(event, x,y, flags, param):
     elif event == cv2.EVENT_LBUTTONUP:
         painting = False
 
+def posterior_onMouse(event, x,y, flags, param):
+    "Handle mouse events on posterior window"
+    if event == cv2.EVENT_LBUTTONDOWN:
+        #print('Mouse at:\t{},{}'.format(x,y))
+        cv2.destroyWindow('posterior')
+
+
 
 def _close():
     """ close/destroy all windows """
@@ -96,6 +104,18 @@ def generate_mask(img,cpy):
     mask[xs,ys] = cpy[xs,ys]
     return mask
 
+def _reset_data():
+    global mus, covs, priors
+    mus = []
+    covs = []
+    priors = []
+
+def _print_stats():
+    "Print current pixel statistics to terminal"
+    for i,mu in enumerate(mus):
+        print('Label {0}:'.format(i))
+        print(mu)
+        print()
 
 def generate_stats():
     """
@@ -110,18 +130,26 @@ def generate_stats():
     print('generating statistics')
 
     # if recently 'reset' and points is currently empty, do nothing
-    if not points:
-        return
+    # if not points:
+    #     return
 
     # Convert set of tuples to pandas DataFrame
-    df = pd.DataFrame(np.asarray(points), columns = ['x','y','label'])
+    #df = pd.DataFrame(np.asarray(points), columns = ['x','y','label'])
     #df.to_csv('../df.csv', index=False)
 
     # Grab bgr values from original image
-    df[['b','g','r']] = df.apply(lambda row: img[row.x,row.y], axis=1)
+    # df[['b','g','r']] = df.apply(lambda row: img[row.x,row.y], axis=1)
 
     # print out current statistics
-    print(df.groupby(['label']).mean().ix[:,['r','g','b']])
+    # print(df.groupby(['label']).mean().ix[:,['r','g','b']])
+
+def mvn_likelihood(x,mu,cov):
+    from numpy import linalg
+    k = len(mu)
+    A = np.log(linalg.det(cov))
+    B = (x-mu).dot(linalg.inv(cov).dot((x-mu)))
+    C = k*np.log(2*np.pi)
+    return np.exp(-0.5 * (A + B + C))
 ###############################################################################
 
 if __name__ == '__main__':
@@ -134,10 +162,21 @@ if __name__ == '__main__':
 
     # load image, clone it, and setup mouse callback function
     img = cv2.imread(args["image"])
-    cv2.imwrite('../data/img.jpg', img)
+
+    # Desired image dimensions (downsampled)
+    from skimage.transform import resize
+    max_width = 300
+    h,w,_ = img.shape
+    scale = max_width / w
+    new_height = int(h * scale)
+    img = resize(img,(new_height, max_width))
+
+    # Create copy where annotations will take place
     cpy = img.copy()
 
-    cv2.namedWindow("image")
+    # Set up a resizable window to keep number of pixels reasonable
+    cv2.namedWindow("image", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('image', 400,300)
     cv2.setMouseCallback("image", onMouse)
 
     # counter for logging
@@ -157,10 +196,7 @@ if __name__ == '__main__':
         if key == ord('r'):
             print('r pressed')
             cpy = img.copy()
-            points = []
-            mus = []
-            covs = []
-            priors = []
+            _reset_data()
 
         #    cycle through mouse modes: idle, label, erase
         elif key == ord('m'):
@@ -184,8 +220,8 @@ if __name__ == '__main__':
 
         # Calculate statistics
         elif key == ord('c'):
+            _reset_data()
 
-            #mask = np.where(cpy!=img,cpy,0)
             mask = generate_mask(img,cpy)
 
             for label,color in label_colors.items():
@@ -198,17 +234,36 @@ if __name__ == '__main__':
                     covs.append(np.cov(tmp.T))
                     priors.append(tmp.shape[0])
 
-            for mu in mus:
-                print(mu, end='\n')
-            print()
-            for cov in covs:
-                print(cov, end='\n')
+            _print_stats()
 
-        # general purpose status checking
-        elif key == ord('a'):
-            #print('length of points:\t{}'.format(len(points)))
-            #print(to_erase)
-            print('hello!')
+
+            if len(mus) == 2: # only want to handle 2-label case
+                # Calculate posterior
+                mu_class1    = mus[0]
+                cov_class1   = covs[0]
+                prior_class1 = priors[0]
+
+                mu_class2    = mus[1]
+                cov_class2   = covs[1]
+                prior_class2 = priors[1]
+
+                like_1 = np.apply_along_axis(mvn_likelihood,2,img,mu_class1,cov_class1)
+                like_2 = np.apply_along_axis(mvn_likelihood,2,img,mu_class2,cov_class2)
+
+                den    = like_1 * prior_class1 + like_2 * prior_class2
+                num    = like_1 * prior_class1
+
+                posterior = num / den
+
+                # Create posterior window
+                cv2.namedWindow('posterior')
+                cv2.imshow('posterior', posterior)
+                cv2.setMouseCallback('posterior',posterior_onMouse)
+
+            else:
+
+                print('Multi-Class posterior not yet implemented')
+
 
         # if the 'q' key is pressed, quit program
         elif key == ord('q'):
@@ -217,13 +272,13 @@ if __name__ == '__main__':
             break
 
         elif key == ord('s'):
-            #io.imsave('../data/cpy.jpg', cpy)
             cv2.imwrite('../data/cpy.jpg', cpy)
             print('cpy saved!')
 
         # Check to see if any pixels in cpy match erase color
         # and if so revert that part of cpy back to img
         to_erase = np.where(np.all(cpy==erase_color, axis=-1))
+
         if to_erase:
             xs = to_erase[0]
             ys = to_erase[1]
